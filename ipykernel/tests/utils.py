@@ -171,16 +171,13 @@ def assemble_output(get_msg):
         if msg_type == "status" and content["execution_state"] == "idle":
             # idle message signals end of output
             break
-        elif msg["msg_type"] == "stream":
+        elif msg_type == "stream":
             if content["name"] == "stdout":
                 stdout += content["text"]
             elif content["name"] == "stderr":
                 stderr += content["text"]
             else:
                 raise KeyError("bad stream: %r" % content["name"])
-        else:
-            # other output, ignored
-            pass
     return stdout, stderr
 
 

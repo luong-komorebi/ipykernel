@@ -475,18 +475,16 @@ class IPythonKernel(KernelBase):
             raw_completions = self.shell.Completer.completions(code, cursor_pos)
             completions = list(_rectify_completions(code, raw_completions))
 
-            comps = []
-            for comp in completions:
-                comps.append(
-                    dict(
-                        start=comp.start,
-                        end=comp.end,
-                        text=comp.text,
-                        type=comp.type,
-                        signature=comp.signature,
-                    )
+            comps = [
+                dict(
+                    start=comp.start,
+                    end=comp.end,
+                    text=comp.text,
+                    type=comp.type,
+                    signature=comp.signature,
                 )
-
+                for comp in completions
+            ]
         if completions:
             s = completions[0].start
             e = completions[0].end
@@ -507,9 +505,11 @@ class IPythonKernel(KernelBase):
     def do_inspect(self, code, cursor_pos, detail_level=0, omit_sections=()):
         name = token_at_cursor(code, cursor_pos)
 
-        reply_content: t.Dict[str, t.Any] = {"status": "ok"}
-        reply_content["data"] = {}
-        reply_content["metadata"] = {}
+        reply_content: t.Dict[str, t.Any] = {
+            "status": "ok",
+            "data": {},
+            "metadata": {},
+        }
         try:
             if release.version_info >= (8,):
                 # `omit_sections` keyword will be available in IPython 8, see
@@ -592,10 +592,10 @@ class IPythonKernel(KernelBase):
 
             fname = getattr(f, "__name__", "f")
 
-            fname = prefix + "f"
-            argname = prefix + "args"
-            kwargname = prefix + "kwargs"
-            resultname = prefix + "result"
+            fname = f"{prefix}f"
+            argname = f"{prefix}args"
+            kwargname = f"{prefix}kwargs"
+            resultname = f"{prefix}result"
 
             ns = {fname: f, argname: args, kwargname: kwargs, resultname: None}
             # print ns
@@ -617,15 +617,14 @@ class IPythonKernel(KernelBase):
         except BaseException as e:
             # invoke IPython traceback formatting
             shell.showtraceback()
+            # FIXME: deprecated piece for ipyparallel (remove in 5.0):
+            e_info = dict(engine_uuid=self.ident, engine_id=self.int_id, method="apply")
             reply_content = {
                 "traceback": shell._last_traceback or [],
                 "ename": str(type(e).__name__),
                 "evalue": str(e),
+                "engine_info": e_info,
             }
-            # FIXME: deprecated piece for ipyparallel (remove in 5.0):
-            e_info = dict(engine_uuid=self.ident, engine_id=self.int_id, method="apply")
-            reply_content["engine_info"] = e_info
-
             self.send_response(
                 self.iopub_socket,
                 "error",

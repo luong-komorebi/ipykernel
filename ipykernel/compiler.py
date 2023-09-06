@@ -26,9 +26,7 @@ def murmur2_x86(data, seed):
         h ^= k
 
     val = length & 0x03
-    k = 0
-    if val == 3:
-        k = (ord(data[rounded_end + 2]) & 0xFF) << 16
+    k = (ord(data[rounded_end + 2]) & 0xFF) << 16 if val == 3 else 0
     if val in [2, 3]:
         k |= (ord(data[rounded_end + 1]) & 0xFF) << 8
     if val in [1, 2, 3]:
@@ -76,8 +74,7 @@ def get_tmp_directory():
 
 
 def get_tmp_hash_seed():
-    hash_seed = 0xC70F6907
-    return hash_seed
+    return 0xC70F6907
 
 
 def get_file_name(code):

@@ -82,7 +82,7 @@ class IOPubThread:
         pipe_in.linger = 0
 
         _uuid = b2a_hex(os.urandom(16)).decode("ascii")
-        iface = self._event_interface = "inproc://%s" % _uuid
+        iface = self._event_interface = f"inproc://{_uuid}"
         pipe_in.bind(iface)
         self._event_puller = ZMQStream(pipe_in, self.io_loop)
         self._event_puller.on_recv(self._handle_event)
@@ -133,8 +133,10 @@ class IOPubThread:
             self._pipe_port = pipe_in.bind_to_random_port("tcp://127.0.0.1")
         except zmq.ZMQError as e:
             warnings.warn(
-                "Couldn't bind IOPub Pipe to 127.0.0.1: %s" % e
-                + "\nsubprocess output will be unavailable."
+                (
+                    f"Couldn't bind IOPub Pipe to 127.0.0.1: {e}"
+                    + "\nsubprocess output will be unavailable."
+                )
             )
             self._pipe_flag = False
             pipe_in.close()
@@ -164,10 +166,7 @@ class IOPubThread:
 
     def _check_mp_mode(self):
         """check for forks, and switch to zmq pipeline if necessary"""
-        if not self._pipe_flag or self._is_master_process():
-            return MASTER
-        else:
-            return CHILD
+        return MASTER if not self._pipe_flag or self._is_master_process() else CHILD
 
     def start(self):
         """Start the IOPub thread"""
@@ -508,8 +507,7 @@ class OutStream(TextIOBase):
                 if self.echo is not sys.__stderr__:
                     print(f"Flush failed: {e}", file=sys.__stderr__)
 
-        data = self._flush_buffer()
-        if data:
+        if data := self._flush_buffer():
             # FIXME: this disables Session's fork-safe check,
             # since pub_thread is itself fork-safe.
             # There should be a better way to do this.
@@ -523,7 +521,7 @@ class OutStream(TextIOBase):
                 ident=self.topic,
             )
 
-    def write(self, string: str) -> Optional[int]:  # type:ignore[override]
+    def write(self, string: str) -> Optional[int]:    # type:ignore[override]
         """Write to current stream after encoding if necessary
 
         Returns
@@ -545,31 +543,28 @@ class OutStream(TextIOBase):
 
         if self.pub_thread is None:
             raise ValueError("I/O operation on closed file")
+        is_child = not self._is_master_process()
+        # only touch the buffer in the IO thread to avoid races
+        with self._buffer_lock:
+            self._buffer.write(string)
+        if is_child:
+            # mp.Pool cannot be trusted to flush promptly (or ever),
+            # and this helps.
+            if self._subprocess_flush_pending:
+                return None
+            self._subprocess_flush_pending = True
+            # We can not rely on self._io_loop.call_later from a subprocess
+            self.pub_thread.schedule(self._flush)
         else:
-
-            is_child = not self._is_master_process()
-            # only touch the buffer in the IO thread to avoid races
-            with self._buffer_lock:
-                self._buffer.write(string)
-            if is_child:
-                # mp.Pool cannot be trusted to flush promptly (or ever),
-                # and this helps.
-                if self._subprocess_flush_pending:
-                    return None
-                self._subprocess_flush_pending = True
-                # We can not rely on self._io_loop.call_later from a subprocess
-                self.pub_thread.schedule(self._flush)
-            else:
-                self._schedule_flush()
+            self._schedule_flush()
 
         return len(string)
 
     def writelines(self, sequence):
         if self.pub_thread is None:
             raise ValueError("I/O operation on closed file")
-        else:
-            for string in sequence:
-                self.write(string)
+        for string in sequence:
+            self.write(string)
 
     def writable(self):
         return True

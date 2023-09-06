@@ -53,14 +53,14 @@ class Heartbeat(Thread):
         elif self.transport == "ipc":
             self.port = 1
             while os.path.exists(f"{self.ip}-{self.port}"):
-                self.port = self.port + 1
+                self.port += 1
         else:
-            raise ValueError("Unrecognized zmq transport: %s" % self.transport)
+            raise ValueError(f"Unrecognized zmq transport: {self.transport}")
         return self.port
 
     def _try_bind_socket(self):
         c = ":" if self.transport == "tcp" else "-"
-        return self.socket.bind(f"{self.transport}://{self.ip}" + c + str(self.port))
+        return self.socket.bind(f"{self.transport}://{self.ip}{c}{str(self.port)}")
 
     def _bind_socket(self):
         try:
@@ -78,7 +78,7 @@ class Heartbeat(Thread):
                 if attempt == max_attempts - 1:
                     raise
                 # Raise if we have any error not related to socket binding
-                if ze.errno != errno.EADDRINUSE and ze.errno != win_in_use:
+                if ze.errno not in [errno.EADDRINUSE, win_in_use]:
                     raise
                 # Raise if we have any error not related to socket binding
                 if self.original_port == 0:

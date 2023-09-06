@@ -1,5 +1,6 @@
 """An Application for launching a kernel"""
 
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 
@@ -52,44 +53,38 @@ from .ipkernel import IPythonKernel
 from .parentpoller import ParentPollerUnix, ParentPollerWindows
 from .zmqshell import ZMQInteractiveShell
 
-# -----------------------------------------------------------------------------
-# Flags and Aliases
-# -----------------------------------------------------------------------------
-
-kernel_aliases = dict(base_aliases)
-kernel_aliases.update(
-    {
-        "ip": "IPKernelApp.ip",
-        "hb": "IPKernelApp.hb_port",
-        "shell": "IPKernelApp.shell_port",
-        "iopub": "IPKernelApp.iopub_port",
-        "stdin": "IPKernelApp.stdin_port",
-        "control": "IPKernelApp.control_port",
-        "f": "IPKernelApp.connection_file",
-        "transport": "IPKernelApp.transport",
-    }
-)
-
-kernel_flags = dict(base_flags)
-kernel_flags.update(
-    {
-        "no-stdout": ({"IPKernelApp": {"no_stdout": True}}, "redirect stdout to the null device"),
-        "no-stderr": ({"IPKernelApp": {"no_stderr": True}}, "redirect stderr to the null device"),
-        "pylab": (
-            {"IPKernelApp": {"pylab": "auto"}},
-            """Pre-load matplotlib and numpy for interactive use with
+kernel_aliases = dict(base_aliases) | {
+    "ip": "IPKernelApp.ip",
+    "hb": "IPKernelApp.hb_port",
+    "shell": "IPKernelApp.shell_port",
+    "iopub": "IPKernelApp.iopub_port",
+    "stdin": "IPKernelApp.stdin_port",
+    "control": "IPKernelApp.control_port",
+    "f": "IPKernelApp.connection_file",
+    "transport": "IPKernelApp.transport",
+}
+kernel_flags = dict(base_flags) | {
+    "no-stdout": (
+        {"IPKernelApp": {"no_stdout": True}},
+        "redirect stdout to the null device",
+    ),
+    "no-stderr": (
+        {"IPKernelApp": {"no_stderr": True}},
+        "redirect stderr to the null device",
+    ),
+    "pylab": (
+        {"IPKernelApp": {"pylab": "auto"}},
+        """Pre-load matplotlib and numpy for interactive use with
         the default matplotlib backend.""",
-        ),
-        "trio-loop": (
-            {"InteractiveShell": {"trio_loop": False}},
-            "Enable Trio as main event loop.",
-        ),
-    }
-)
-
+    ),
+    "trio-loop": (
+        {"InteractiveShell": {"trio_loop": False}},
+        "Enable Trio as main event loop.",
+    ),
+}
 # inherit flags&aliases for any IPython shell apps
-kernel_aliases.update(shell_aliases)
-kernel_flags.update(shell_flags)
+kernel_aliases |= shell_aliases
+kernel_flags |= shell_flags
 
 # inherit flags&aliases for Sessions
 kernel_aliases.update(session_aliases)
@@ -227,7 +222,7 @@ class IPKernelApp(BaseIPythonApplication, InteractiveShellApp, ConnectionFileMix
                     path = "%s-%i" % (self.ip, port)
             else:
                 path = "%s-%i" % (self.ip, port)
-            s.bind("ipc://%s" % path)
+            s.bind(f"ipc://{path}")
         return port
 
     def _bind_socket(self, s, port):
@@ -244,7 +239,7 @@ class IPKernelApp(BaseIPythonApplication, InteractiveShellApp, ConnectionFileMix
                 return self._try_bind_socket(s, port)
             except zmq.ZMQError as ze:
                 # Raise if we have any error not related to socket binding
-                if ze.errno != errno.EADDRINUSE and ze.errno != win_in_use:
+                if ze.errno not in [errno.EADDRINUSE, win_in_use]:
                     raise
                 if attempt == max_attempts - 1:
                     raise
@@ -277,7 +272,7 @@ class IPKernelApp(BaseIPythonApplication, InteractiveShellApp, ConnectionFileMix
 
     def init_connection_file(self):
         if not self.connection_file:
-            self.connection_file = "kernel-%s.json" % os.getpid()
+            self.connection_file = f"kernel-{os.getpid()}.json"
         try:
             self.connection_file = filefind(self.connection_file, [".", self.connection_dir])
         except OSError:
@@ -388,7 +383,7 @@ class IPKernelApp(BaseIPythonApplication, InteractiveShellApp, ConnectionFileMix
 
         for channel in ("shell", "control", "stdin"):
             self.log.debug("Closing %s channel", channel)
-            socket = getattr(self, channel + "_socket", None)
+            socket = getattr(self, f"{channel}_socket", None)
             if socket and not socket.closed:
                 socket.close()
         self.log.debug("Terminating zmq context")
@@ -408,7 +403,7 @@ class IPKernelApp(BaseIPythonApplication, InteractiveShellApp, ConnectionFileMix
             tail = self.connection_file
         lines = [
             "To connect another client to this kernel, use:",
-            "    --existing %s" % tail,
+            f"    --existing {tail}",
         ]
         # log connection info
         # info-level, so often not shown.
@@ -435,10 +430,10 @@ class IPKernelApp(BaseIPythonApplication, InteractiveShellApp, ConnectionFileMix
         """redirects stdout/stderr to devnull if necessary"""
         if self.no_stdout or self.no_stderr:
             blackhole = open(os.devnull, "w")
-            if self.no_stdout:
-                sys.stdout = sys.__stdout__ = blackhole
-            if self.no_stderr:
-                sys.stderr = sys.__stderr__ = blackhole
+        if self.no_stdout:
+            sys.stdout = sys.__stdout__ = blackhole
+        if self.no_stderr:
+            sys.stderr = sys.__stderr__ = blackhole
 
     def init_io(self):
         """Redirect input streams and set a display hook."""
@@ -540,7 +535,9 @@ class IPKernelApp(BaseIPythonApplication, InteractiveShellApp, ConnectionFileMix
             profile_dir=self.profile_dir,
             user_ns=self.user_ns,
         )
-        kernel.record_ports({name + "_port": port for name, port in self._ports.items()})
+        kernel.record_ports(
+            {f"{name}_port": port for name, port in self._ports.items()}
+        )
         self.kernel = kernel
 
         # Allow the displayhook to get the execution count

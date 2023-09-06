@@ -38,20 +38,18 @@ def test():
     # list of input/expected output.  Use None for the expected output if it
     # can be the same as the input.
     pairs = [
-        (1, None),  # start with scalars
+        (1, None),
         (1.0, None),
         ("a", None),
         (True, None),
         (False, None),
         (None, None),
-        # Containers
         ([1, 2], None),
         ((1, 2), [1, 2]),
         ({1, 2}, [1, 2]),
         (dict(x=1), None),
         ({"x": 1, "y": [1, 2, 3], "1": "int"}, None),
-        # More exotic objects
-        ((x for x in range(3)), [0, 1, 2]),
+        (iter(range(3)), [0, 1, 2]),
         (iter([1, 2]), [1, 2]),
         (datetime(1991, 7, 3, 12, 00), "1991-07-03T12:00:00.000000"),
         (MyFloat(), 3.14),

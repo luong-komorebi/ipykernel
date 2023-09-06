@@ -42,7 +42,7 @@ class Comm(LoggingConfigurable):
 
     @default("topic")
     def _default_topic(self):
-        return ("comm-%s" % self.comm_id).encode("ascii")
+        return f"comm-{self.comm_id}".encode("ascii")
 
     _open_data = Dict(help="data dict, if any, to be included in comm_open")
     _close_data = Dict(help="data dict, if any, to be included in comm_close")

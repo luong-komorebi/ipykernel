@@ -110,11 +110,7 @@ def connect_qtconsole(connection_file=None, argv=None):
 
     cmd = ";".join(["from qtconsole import qtconsoleapp", "qtconsoleapp.main()"])
 
-    kwargs: Dict[str, Any] = {}
-    # Launch the Qt console in a separate session & process group, so
-    # interrupting the kernel doesn't kill it.
-    kwargs["start_new_session"] = True
-
+    kwargs: Dict[str, Any] = {"start_new_session": True}
     return Popen(
         [sys.executable, "-c", cmd, "--existing", cf] + argv,
         stdout=PIPE,

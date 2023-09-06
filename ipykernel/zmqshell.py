@@ -105,8 +105,7 @@ class ZMQDisplayPublisher(DisplayPublisher):
         if transient is None:
             transient = {}
         self._validate_data(data, metadata)
-        content = {}
-        content["data"] = encode_images(data)
+        content = {"data": encode_images(data)}
         content["metadata"] = metadata
         content["transient"] = transient
 
@@ -337,7 +336,7 @@ class KernelMagics(Magics):
         @line_magic
         def man(self, arg_s):
             """Find the man page for the given command and display in pager."""
-            page.page(self.shell.getoutput("man %s | col -b" % arg_s, split=False))
+            page.page(self.shell.getoutput(f"man {arg_s} | col -b", split=False))
 
     @line_magic
     def connect_info(self, arg_s):
@@ -459,8 +458,7 @@ class ZMQInteractiveShell(InteractiveShell):
                 loop = self.kernel.io_loop
                 loop.call_later(0.1, loop.stop)
             if self.kernel.eventloop:
-                exit_hook = getattr(self.kernel.eventloop, "exit_hook", None)
-                if exit_hook:
+                if exit_hook := getattr(self.kernel.eventloop, "exit_hook", None):
                     exit_hook(self.kernel)
 
     keepkernel_on_exit = None
@@ -474,7 +472,7 @@ class ZMQInteractiveShell(InteractiveShell):
             real_enable_gui(gui)
             self.active_eventloop = gui
         except ValueError as e:
-            raise UsageError("%s" % e) from e
+            raise UsageError(f"{e}") from e
 
     def init_environment(self):
         """Configure the user's environment."""
@@ -539,12 +537,7 @@ class ZMQInteractiveShell(InteractiveShell):
         }
 
         dh = self.displayhook
-        # Send exception info over pub socket for other clients than the caller
-        # to pick up
-        topic = None
-        if dh.topic:
-            topic = dh.topic.replace(b"execute_result", b"error")
-
+        topic = dh.topic.replace(b"execute_result", b"error") if dh.topic else None
         dh.session.send(
             dh.pub_socket,
             "error",

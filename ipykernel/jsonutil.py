@@ -119,10 +119,7 @@ def json_clean(obj):
 
     if isinstance(obj, numbers.Real):
         # cast out-of-range floats to their reprs
-        if math.isnan(obj) or math.isinf(obj):
-            return repr(obj)
-        return float(obj)
-
+        return repr(obj) if math.isnan(obj) or math.isinf(obj) else float(obj)
     if isinstance(obj, atomic_ok):
         return obj
 
@@ -150,11 +147,7 @@ def json_clean(obj):
                 "dict cannot be safely converted to JSON: "
                 "key collision would lead to dropped values"
             )
-        # If all OK, proceed by making the new dict that will be json-safe
-        out = {}
-        for k, v in obj.items():
-            out[str(k)] = json_clean(v)
-        return out
+        return {str(k): json_clean(v) for k, v in obj.items()}
     if isinstance(obj, datetime):
         return obj.strftime(ISO8601)
 

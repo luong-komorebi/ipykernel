@@ -34,7 +34,9 @@ from .utils import (
 def _check_master(kc, expected=True, stream="stdout"):
     execute(kc=kc, code="import sys")
     flush_channels(kc)
-    msg_id, content = execute(kc=kc, code="print(sys.%s._is_master_process())" % stream)
+    msg_id, content = execute(
+        kc=kc, code=f"print(sys.{stream}._is_master_process())"
+    )
     stdout, stderr = assemble_output(kc.get_iopub_msg)
     assert stdout.strip() == repr(expected)
 
@@ -220,13 +222,13 @@ def test_raw_input():
 def test_save_history():
     # Saving history from the kernel with %hist -f was failing because of
     # unicode problems on Python 2.
-    with kernel() as kc, TemporaryDirectory() as td:
+    with (kernel() as kc, TemporaryDirectory() as td):
         file = os.path.join(td, "hist.out")
         execute("a=1", kc=kc)
         wait_for_idle(kc)
         execute('b="abcþ"', kc=kc)
         wait_for_idle(kc)
-        _, reply = execute("%hist -f " + file, kc=kc)
+        _, reply = execute(f"%hist -f {file}", kc=kc)
         assert reply["status"] == "ok"
         with open(file, encoding="utf-8") as f:
             content = f.read()
@@ -333,10 +335,7 @@ def test_message_order():
         _check_status(reply)
         offset = reply["execution_count"] + 1
         cell = "a += 1\na"
-        msg_ids = []
-        # submit N executions as fast as we can
-        for _ in range(N):
-            msg_ids.append(kc.execute(cell))
+        msg_ids = [kc.execute(cell) for _ in range(N)]
         # check message-handling order
         for i, msg_id in enumerate(msg_ids, offset):
             reply = kc.get_shell_msg(timeout=TIMEOUT)
@@ -467,11 +466,7 @@ def test_control_thread_priority():
 
         sleep_msg_id = kc.execute("import asyncio; await asyncio.sleep(2)")
 
-        # submit N shell messages
-        shell_msg_ids = []
-        for i in range(N):
-            shell_msg_ids.append(kc.execute(f"i = {i}"))
-
+        shell_msg_ids = [kc.execute(f"i = {i}") for i in range(N)]
         # ensure all shell messages have arrived at the kernel before any control messages
         time.sleep(0.5)
         # at this point, shell messages should be waiting in msg_queue,
@@ -487,14 +482,11 @@ def test_control_thread_priority():
 
         # finally, collect the replies on both channels for comparison
         get_reply(kc, sleep_msg_id)
-        shell_replies = []
-        for msg_id in shell_msg_ids:
-            shell_replies.append(get_reply(kc, msg_id))
-
-        control_replies = []
-        for msg_id in control_msg_ids:
-            control_replies.append(get_reply(kc, msg_id, channel="control"))
-
+        shell_replies = [get_reply(kc, msg_id) for msg_id in shell_msg_ids]
+        control_replies = [
+            get_reply(kc, msg_id, channel="control")
+            for msg_id in control_msg_ids
+        ]
     # verify that all control messages were handled before all shell messages
     shell_dates = [msg["header"]["date"] for msg in shell_replies]
     control_dates = [msg["header"]["date"] for msg in control_replies]

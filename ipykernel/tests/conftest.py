@@ -26,9 +26,7 @@ if resource is not None:
     if hard >= DEFAULT_SOFT:
         soft = DEFAULT_SOFT
 
-    if hard < soft:
-        hard = soft
-
+    hard = max(hard, soft)
     resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
 
 

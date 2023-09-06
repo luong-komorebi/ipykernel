@@ -108,10 +108,7 @@ class Kernel(SingletonConfigurable):
             DeprecationWarning,
             stacklevel=2,
         )
-        if self.shell_stream is not None:
-            return [self.shell_stream]
-        else:
-            return []
+        return [self.shell_stream] if self.shell_stream is not None else []
 
     @observe("shell_streams")
     def _shell_streams_changed(self, change):  # pragma: no cover
@@ -456,7 +453,6 @@ class Kernel(SingletonConfigurable):
             except KeyboardInterrupt:
                 # Ctrl-C shouldn't crash the kernel
                 self.log.error("KeyboardInterrupt caught in kernel")
-                pass
             if self.eventloop is eventloop:
                 # schedule advance again
                 schedule_next()
@@ -467,6 +463,8 @@ class Kernel(SingletonConfigurable):
             # giving us a chance to handle messages in the meantime
             self.log.debug("Scheduling eventloop advance")
             self.io_loop.call_later(0.001, advance_eventloop)
+
+        # begin polling the eventloop
 
         # begin polling the eventloop
         schedule_next()
@@ -838,10 +836,7 @@ class Kernel(SingletonConfigurable):
         return {"status": "ok", "history": []}
 
     async def connect_request(self, stream, ident, parent):
-        if self._recorded_ports is not None:
-            content = self._recorded_ports.copy()
-        else:
-            content = {}
+        content = {} if self._recorded_ports is None else self._recorded_ports.copy()
         content["status"] = "ok"
         msg = self.session.send(stream, "connect_reply", content, parent, ident)
         self.log.debug("%s", msg)
@@ -859,7 +854,7 @@ class Kernel(SingletonConfigurable):
 
     async def kernel_info_request(self, stream, ident, parent):
         content = {"status": "ok"}
-        content.update(self.kernel_info)
+        content |= self.kernel_info
         msg = self.session.send(stream, "kernel_info_reply", content, parent, ident)
         self.log.debug("%s", msg)
 
@@ -956,12 +951,7 @@ class Kernel(SingletonConfigurable):
     def get_process_metric_value(self, process, name, attribute=None):
         try:
             metric_value = getattr(process, name)()
-            if attribute is not None:  # ... a named tuple
-                return getattr(metric_value, attribute)
-            else:  # ... or a number
-                return metric_value
-        # Avoid littering logs with stack traces
-        # complaining about dead processes
+            return metric_value if attribute is None else getattr(metric_value, attribute)
         except BaseException:
             return None
 
@@ -975,17 +965,15 @@ class Kernel(SingletonConfigurable):
             process.pid: self.processes.get(process.pid, process) for process in all_processes
         }
         reply_content["kernel_cpu"] = sum(
-            [
-                self.get_process_metric_value(process, "cpu_percent", None)
-                for process in self.processes.values()
-            ]
+            self.get_process_metric_value(process, "cpu_percent", None)
+            for process in self.processes.values()
         )
         mem_info_type = "pss" if hasattr(current_process.memory_full_info(), "pss") else "rss"
         reply_content["kernel_memory"] = sum(
-            [
-                self.get_process_metric_value(process, "memory_full_info", mem_info_type)
-                for process in self.processes.values()
-            ]
+            self.get_process_metric_value(
+                process, "memory_full_info", mem_info_type
+            )
+            for process in self.processes.values()
         )
         cpu_percent = psutil.cpu_percent()
         # https://psutil.readthedocs.io/en/latest/index.html?highlight=cpu#psutil.cpu_percent
@@ -1079,7 +1067,7 @@ class Kernel(SingletonConfigurable):
 
     def _topic(self, topic):
         """prefixed topic for IOPub messages"""
-        base = "kernel.%s" % self.ident
+        base = f"kernel.{self.ident}"
 
         return (f"{base}.{topic}").encode()
 

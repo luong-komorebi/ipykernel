@@ -184,7 +184,7 @@ class DebugpyClient:
 
     def _get_endpoint(self):
         host, port = self.get_host_port()
-        return "tcp://" + host + ":" + str(port)
+        return f"tcp://{host}:{str(port)}"
 
     def _forward_event(self, msg):
         if msg["event"] == "initialized":
@@ -232,14 +232,12 @@ class DebugpyClient:
         # 3]  Waits for configurationDone response
         await self._wait_for_response()
 
-        # 4] Waits for attachResponse and returns it
-        attach_rep = await self._wait_for_response()
-        return attach_rep
+        return await self._wait_for_response()
 
     def get_host_port(self):
         if self.debugpy_port == -1:
             socket = self.debugpy_stream.socket
-            socket.bind_to_random_port("tcp://" + self.debugpy_host)
+            socket.bind_to_random_port(f"tcp://{self.debugpy_host}")
             self.endpoint = socket.getsockopt(zmq.LAST_ENDPOINT).decode("utf-8")
             socket.unbind(self.endpoint)
             index = self.endpoint.rfind(":")
@@ -265,12 +263,12 @@ class DebugpyClient:
         if self.wait_for_attach and msg["command"] == "attach":
             rep = await self._handle_init_sequence()
             self.wait_for_attach = False
-            return rep
         else:
             rep = await self._wait_for_response()
             self.log.debug("DEBUGPYCLIENT - returning:")
             self.log.debug(rep)
-            return rep
+
+        return rep
 
 
 class Debugger:
@@ -344,7 +342,7 @@ class Debugger:
 
     def _build_variables_response(self, request, variables):
         var_list = [var for var in variables if self.accept_variable(var["name"])]
-        reply = {
+        return {
             "seq": request["seq"],
             "type": "response",
             "request_seq": request["seq"],
@@ -352,7 +350,6 @@ class Debugger:
             "command": request["command"],
             "body": {"variables": var_list},
         }
-        return reply
 
     def _accept_stopped_thread(self, thread_name):
         # TODO: identify Thread-2, Thread-3 and Thread-4. These are NOT
@@ -382,7 +379,7 @@ class Debugger:
                 os.makedirs(tmp_dir)
             host, port = self.debugpy_client.get_host_port()
             code = "import debugpy;"
-            code += 'debugpy.listen(("' + host + '",' + port + "))"
+            code += f'debugpy.listen(("{host}",{port}))'
             content = {"code": code, "silent": True}
             self.session.send(
                 self.shell_socket,
@@ -420,14 +417,13 @@ class Debugger:
         with open(file_name, "w", encoding="utf-8") as f:
             f.write(code)
 
-        reply = {
+        return {
             "type": "response",
             "request_seq": message["seq"],
             "success": True,
             "command": message["command"],
             "body": {"sourcePath": file_name},
         }
-        return reply
 
     async def setBreakpoints(self, message):
         source = message["arguments"]["source"]["path"]
@@ -494,8 +490,7 @@ class Debugger:
         ]
         cond = variable_name not in forbid_list
         cond = cond and not bool(re.search(r"^_\d", variable_name))
-        cond = cond and variable_name[0:2] != "_i"
-        return cond
+        return cond and variable_name[:2] != "_i"
 
     async def variables(self, message):
         reply = {}
@@ -525,20 +520,20 @@ class Debugger:
         return await self._forward_message(message)
 
     async def configurationDone(self, message):
-        reply = {
+        return {
             "seq": message["seq"],
             "type": "response",
             "request_seq": message["seq"],
             "success": True,
             "command": message["command"],
         }
-        return reply
 
     async def debugInfo(self, message):
-        breakpoint_list = []
-        for key, value in self.breakpoint_list.items():
-            breakpoint_list.append({"source": key, "breakpoints": value})
-        reply = {
+        breakpoint_list = [
+            {"source": key, "breakpoints": value}
+            for key, value in self.breakpoint_list.items()
+        ]
+        return {
             "type": "response",
             "request_seq": message["seq"],
             "success": True,
@@ -555,7 +550,6 @@ class Debugger:
                 "exceptionPaths": ["Python Exceptions"],
             },
         }
-        return reply
 
     async def inspectVariables(self, message):
         self.variable_explorer.untrack_all()
@@ -579,7 +573,7 @@ class Debugger:
         valid_name = str.isidentifier(var_name)
         if not valid_name:
             reply["body"] = {"data": {}, "metadata": {}}
-            if var_name == "special variables" or var_name == "function variables":
+            if var_name in ["special variables", "function variables"]:
                 reply["success"] = True
             return reply
 
@@ -629,8 +623,7 @@ class Debugger:
             if filename and filename.endswith(".py"):
                 mods.append({"id": i, "name": module.__name__, "path": filename})
 
-        reply = {"body": {"modules": mods, "totalModules": len(modules)}}
-        return reply
+        return {"body": {"modules": mods, "totalModules": len(modules)}}
 
     async def process_request(self, message):
         reply = {}
